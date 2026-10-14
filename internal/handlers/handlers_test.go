@@ -850,3 +850,143 @@ func TestSecurityHeadersNotPresentOnImageEndpoints(t *testing.T) {
 		})
 	}
 }
+
+func TestBadgeHandler(t *testing.T) {
+	_, mux := setupTestService(t)
+
+	tests := []struct {
+		name     string
+		path     string
+		wantCode int
+		wantCT   string
+		wantBody []string
+	}{
+		{
+			name:     "label-message-color",
+			path:     "/badge/build-passing-brightgreen",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+			wantBody: []string{"<svg", "build", "passing"},
+		},
+		{
+			name:     "message-color only",
+			path:     "/badge/passing-4c1",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+			wantBody: []string{"<svg", "passing"},
+		},
+		{
+			name:     "percent-encoded spaces",
+			path:     "/badge/just%20the%20message-8a2be2",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+			wantBody: []string{"<svg", "just the message"},
+		},
+		{
+			name:     "flat-square style",
+			path:     "/badge/build-ok-blue?style=flat-square",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+			wantBody: []string{"<svg"},
+		},
+		{
+			name:     "for-the-badge style",
+			path:     "/badge/build-ok-blue?style=for-the-badge",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+			wantBody: []string{"<svg", "BUILD", "OK"},
+		},
+		{
+			name:     "label override via query param",
+			path:     "/badge/build-passing-green?label=ci",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+			wantBody: []string{"<svg", "ci", "passing"},
+		},
+		{
+			name:     "color override via query param",
+			path:     "/badge/build-passing-green?color=red",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+		},
+		{
+			name:     "labelColor override",
+			path:     "/badge/build-passing-green?labelColor=blue",
+			wantCode: http.StatusOK,
+			wantCT:   "image/svg+xml",
+		},
+		{
+			name:     "missing badge path returns 400",
+			path:     "/badge/",
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "invalid color returns 400",
+			path:     "/badge/build-passing-notacolor",
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "no hyphen returns 400",
+			path:     "/badge/nodash",
+			wantCode: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantCode {
+				t.Fatalf("expected status %d, got %d (body: %s)", tt.wantCode, rec.Code, rec.Body.String())
+			}
+			if tt.wantCT != "" {
+				if ct := rec.Header().Get("Content-Type"); ct != tt.wantCT {
+					t.Errorf("expected Content-Type %q, got %q", tt.wantCT, ct)
+				}
+			}
+			body := rec.Body.String()
+			for _, want := range tt.wantBody {
+				if !strings.Contains(body, want) {
+					t.Errorf("expected body to contain %q", want)
+				}
+			}
+		})
+	}
+}
+
+func TestBadgeHandlerCacheHit(t *testing.T) {
+	renderer, err := render.New()
+	if err != nil {
+		t.Fatalf("renderer init: %v", err)
+	}
+	cache, _ := lru.New[string, []byte](10)
+	svc := NewService(renderer, cache, config.DefaultServerConfig())
+	mux := http.NewServeMux()
+	svc.RegisterRoutes(mux, nil)
+
+	path := "/badge/v1-stable-blue"
+
+	// First request — should be a cache miss
+	req1 := httptest.NewRequest(http.MethodGet, path, nil)
+	rec1 := httptest.NewRecorder()
+	mux.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", rec1.Code)
+	}
+	if rec1.Header().Get("X-Cache") != "MISS" {
+		t.Errorf("first request: expected X-Cache MISS, got %q", rec1.Header().Get("X-Cache"))
+	}
+
+	// Second request — should be a cache hit
+	req2 := httptest.NewRequest(http.MethodGet, path, nil)
+	rec2 := httptest.NewRecorder()
+	mux.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("second request: expected 200, got %d", rec2.Code)
+	}
+	if rec2.Header().Get("X-Cache") != "HIT" {
+		t.Errorf("second request: expected X-Cache HIT, got %q", rec2.Header().Get("X-Cache"))
+	}
+}

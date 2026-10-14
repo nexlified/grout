@@ -131,6 +131,90 @@ curl "http://localhost:8080/placeholder/800x600.png?joke=true&category=programmi
 curl "http://localhost:8080/placeholder/1000x500?joke=true&bg=2c3e50&color=ecf0f1"
 ```
 
+## `/badge/` Endpoint
+
+Generates a flat, Shields.io-compatible SVG badge from a URL path.
+
+- **Path Form**: `/badge/{content}` where `{content}` encodes the badge text and color.
+
+### Path Format
+
+Two formats are supported:
+
+| Format | Description | Example |
+|--------|-------------|---------|
+| `message-color` | Message with color (no label) | `/badge/passing-brightgreen` |
+| `label-message-color` | Label, message, and color | `/badge/build-passing-brightgreen` |
+
+**Path encoding rules** (compatible with Shields.io):
+
+| Encoding | Result |
+|----------|--------|
+| `-` | Field separator (label / message / color) |
+| `--` | Literal `-` in text |
+| `_` | Space in text |
+| `__` | Literal `_` in text |
+| `%20` | Space (standard URL percent-encoding) |
+
+### Named Colors
+
+| Name | Color |
+|------|-------|
+| `brightgreen` | ![#4c1](https://img.shields.io/badge/-4c1-4c1) |
+| `green` | `#97ca00` |
+| `yellowgreen` | `#a4a61d` |
+| `yellow` | `#dfb317` |
+| `orange` | `#fe7d37` |
+| `red` | `#e05d44` |
+| `blue` | `#007ec6` |
+| `lightgrey` / `lightgray` / `grey` / `gray` | `#9f9f9f` |
+| `success` | alias for `brightgreen` |
+| `important` | alias for `orange` |
+| `critical` | alias for `red` |
+| `informational` | alias for `blue` |
+| `inactive` | alias for `lightgrey` |
+
+Hex colors (3- or 6-digit, with or without `#`) are also accepted.
+
+### Query Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `label` | Override the label (left-side) text | _(from path)_ |
+| `labelColor` | Label background color (named or hex) | `555` |
+| `color` | Message background color override (named or hex) | _(from path)_ |
+| `style` | Badge style: `flat`, `flat-square`, `for-the-badge` | `flat` |
+| `cacheSeconds` | Accepted for compatibility; does not change server cache headers | — |
+| `logo`, `logoColor`, `link` | Accepted for compatibility; currently ignored | — |
+
+### Examples
+
+```bash
+# Basic passing badge
+curl "http://localhost:8080/badge/build-passing-brightgreen"
+
+# Message-only badge with hex color
+curl "http://localhost:8080/badge/v1.2.3-007ec6"
+
+# Spaces via percent-encoding
+curl "http://localhost:8080/badge/coverage-98%25-brightgreen"
+
+# Double-hyphen for literal hyphens in label
+curl "http://localhost:8080/badge/my--app-stable-blue"
+
+# Underscores for spaces
+curl "http://localhost:8080/badge/hello_world-passing-green"
+
+# Override label and colors via query parameters
+curl "http://localhost:8080/badge/build-passing-brightgreen?label=ci&labelColor=0d1117"
+
+# Flat-square style
+curl "http://localhost:8080/badge/build-passing-brightgreen?style=flat-square"
+
+# For-the-badge style (uppercase text, larger badge)
+curl "http://localhost:8080/badge/build-passing-brightgreen?style=for-the-badge"
+```
+
 ## Response Characteristics
 
 - Images are served as SVG by default (when no extension is specified). The `Content-Type` header is set based on the requested format: `image/svg+xml`, `image/webp`, `image/png`, `image/jpeg`, or `image/gif`.

@@ -60,6 +60,7 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux, rateLimiter interface{}) {
 	// Apply rate limiting to image generation endpoints
 	mux.Handle("/avatar/", applyRateLimit(http.HandlerFunc(s.handleAvatar)))
 	mux.Handle("/placeholder/", applyRateLimit(http.HandlerFunc(s.handlePlaceholder)))
+	mux.Handle("/badge/", applyRateLimit(http.HandlerFunc(s.handleBadge)))
 	// No rate limiting for health, favicon, robots.txt, sitemap.xml
 	mux.HandleFunc("GET /health", s.HandleHealth)
 	mux.HandleFunc("GET /favicon.ico", s.handleFavicon)
